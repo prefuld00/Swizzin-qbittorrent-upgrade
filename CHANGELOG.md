@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.5] — 2026-10-24
+<a id="175--2026-10-24"></a>
+
+### Added
+
+- **Torrent Creator temp**: after a successful build/install, ensure `/tmp/.qBittorrent` exists with mode **1777** (sticky, multi-user safe like `/tmp`) so creating torrents works for all `qbittorrent@*` users.
+
+---
+
 ## [1.7.4] — 2026-10-24
 <a id="174--2026-10-24"></a>
 

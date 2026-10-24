@@ -7,7 +7,7 @@ IFS=$'\n\t'
 # -----------------------------------------------------------------------------
 SCRIPT_NAME="$(basename "${0}")"
 readonly SCRIPT_NAME
-readonly SCRIPT_VERSION="1.7.4"
+readonly SCRIPT_VERSION="1.7.5"
 readonly LOG_FILE_ENV="${QBT_UPGRADE_LOG:-}"
 readonly WORK_ROOT_ENV="${QBT_UPGRADE_WORK:-}"
 # Defaults become versioned after the target qBittorrent release is known
@@ -27,6 +27,9 @@ readonly MIN_FREE_MIB=4096
 readonly NGINX_QBT_CONF="/etc/nginx/apps/qbittorrent.conf"
 readonly NGINX_QBT_CONF_ORIG="/etc/nginx/apps/qbittorrent.conf.orig"
 readonly QBT_LIBTORRENT_BRANCH_DEFAULT="RC_1_2"
+# Torrent Creator (and related temp I/O) uses this shared path on multi-user hosts.
+readonly QBT_TORRENT_TMP_DIR="/tmp/.qBittorrent"
+readonly QBT_TORRENT_TMP_MODE="1777"
 
 # Runtime flags / state
 DRY_RUN=0
@@ -1541,6 +1544,7 @@ Planned changes:
   - Build qBittorrent ${TARGET_VERSION} from official source (GUI=OFF, WEBUI=ON)
   - Create fpm package qbittorrent-nox_$(qbt_to_deb_version "${TARGET_VERSION}")_*.deb and install via dpkg -i
   - apt-mark hold qbittorrent-nox (Swizzin behaviour)
+  - Ensure ${QBT_TORRENT_TMP_DIR} exists with mode ${QBT_TORRENT_TMP_MODE} (Torrent Creator temp; sticky like /tmp)
   - Restart previously active services; leave inactive ones stopped
   - Check WebUI reachability locally
   - nginx: $(if series_ge_52 "${SERIES}"; then echo "backup ${NGINX_QBT_CONF} -> ${NGINX_QBT_CONF_ORIG}, write 5.2+ proxy config before package install (test+restore on failure)"; else echo "skip (series ${SERIES:-?} < 5.2)"; fi)
@@ -2603,6 +2607,37 @@ install_qbt_cli_into_stage() {
 }
 
 # -----------------------------------------------------------------------------
+# Host paths required after install (Torrent Creator, multi-user)
+# -----------------------------------------------------------------------------
+ensure_qbittorrent_torrent_tmp_dir() {
+  # qBittorrent writes torrent-creation temp data under /tmp/.qBittorrent.
+  # Mode 1777 matches /tmp semantics (world-writable + sticky) so every
+  # qbittorrent@user instance can use it on Swizzin multi-user hosts.
+  info "Ensuring Torrent Creator temp dir ${QBT_TORRENT_TMP_DIR} (mode ${QBT_TORRENT_TMP_MODE})..."
+
+  if [[ "${DRY_RUN}" -eq 1 ]]; then
+    info "DRY-RUN: would mkdir -p ${QBT_TORRENT_TMP_DIR} && chmod ${QBT_TORRENT_TMP_MODE} ${QBT_TORRENT_TMP_DIR}"
+    return 0
+  fi
+
+  if [[ -e "${QBT_TORRENT_TMP_DIR}" && ! -d "${QBT_TORRENT_TMP_DIR}" ]]; then
+    die "${QBT_TORRENT_TMP_DIR} exists but is not a directory - refuse to replace."
+  fi
+
+  mkdir -p -- "${QBT_TORRENT_TMP_DIR}" \
+    || die "Could not create ${QBT_TORRENT_TMP_DIR}."
+  chmod "${QBT_TORRENT_TMP_MODE}" -- "${QBT_TORRENT_TMP_DIR}" \
+    || die "Could not chmod ${QBT_TORRENT_TMP_MODE} on ${QBT_TORRENT_TMP_DIR}."
+
+  local mode
+  mode="$(stat -c '%a' "${QBT_TORRENT_TMP_DIR}" 2>/dev/null || true)"
+  if [[ "${mode}" != "${QBT_TORRENT_TMP_MODE}" ]]; then
+    die "${QBT_TORRENT_TMP_DIR} mode is ${mode:-unknown}, expected ${QBT_TORRENT_TMP_MODE}."
+  fi
+  ok "${QBT_TORRENT_TMP_DIR} ready (mode ${mode})"
+}
+
+# -----------------------------------------------------------------------------
 # Post-install verification
 # -----------------------------------------------------------------------------
 verify_installation() {
@@ -2743,6 +2778,8 @@ run_upgrade() {
   # Apply nginx before replacing the binary so a failed nginx -t leaves the old package intact.
   apply_nginx_qbittorrent_52
   build_qbittorrent
+  # After the package is installed: shared temp for Torrent Creator (all panel users).
+  ensure_qbittorrent_torrent_tmp_dir
   start_previous_services
   verify_installation
 

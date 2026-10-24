@@ -12,7 +12,7 @@ No qBittorrent series and no dependency minima are hard-coded in the script name
 
 The workflow mirrors Swizzin’s compile-and-package approach (see [swizzin/swizzin#1300](https://github.com/swizzin/swizzin/pull/1300)) **without** modifying `/etc/swizzin` sources or switching Swizzin git branches. Production configs, multi-user instances, dry-run, and rollback are preserved.
 
-**Current script version:** [`1.7.4`](CHANGELOG.md#174--2026-10-24) — full history in [CHANGELOG.md](CHANGELOG.md).
+**Current script version:** [`1.7.5`](CHANGELOG.md#175--2026-10-24) — full history in [CHANGELOG.md](CHANGELOG.md).
 
 > The script does **not** start itself (no cron/daemon). You must invoke it. Once started, it auto-selects and installs the current GitHub stable unless you pass `--version` or `--beta`.
 
@@ -32,7 +32,7 @@ Commands and flags otherwise stay the same (`--dry-run`, `--yes`, `--rollback`, 
 
 | Component | Supported | Notes |
 | --- | --- | --- |
-| **This tool** | [`1.7.4`](CHANGELOG.md#174--2026-10-24) | See [CHANGELOG.md](CHANGELOG.md) for older tool releases |
+| **This tool** | [`1.7.5`](CHANGELOG.md#175--2026-10-24) | See [CHANGELOG.md](CHANGELOG.md) for older tool releases |
 | **Host OS** | Debian **12** (Bookworm) | Other releases are untested |
 | **Panel stack** | [Swizzin](https://swizzin.ltd/) with multi-user `qbittorrent@*` | `/etc/swizzin` is not modified |
 | **Upgrade from** | qBittorrent **5.1.x** / **5.2.x** / **5.3.x** | Other starting versions may work; verify first |
@@ -61,7 +61,7 @@ Illustrative only — each run re-reads upstream for the chosen tag:
 
 On Bookworm, distro Qt is often below the upstream Qt floor → **qt6-swizzin** (+ zlib-ng) may be installed. Lua for 5.3+ `PLUGINS` is **bundled** in the qBittorrent source (no system `liblua`).
 
-When publishing on GitHub, tag tool releases (e.g. `v1.7.4`) and optionally point this table at [Releases](../../releases).
+When publishing on GitHub, tag tool releases (e.g. `v1.7.5`) and optionally point this table at [Releases](../../releases).
 
 ---
 
@@ -82,6 +82,7 @@ See [`LICENSE`](LICENSE) for the full terms, or <https://www.gnu.org/licenses/gp
 - Packages with `fpm` and installs via `dpkg -i` (no blind `apt remove` / `purge`)
 - Reuses a compatible static libtorrent when possible; rebuilds only when required
 - Installs Swizzin cross-build Qt (`qt6-swizzin`) when distro Qt is too old — **no** full Qt source compile by default
+- After install: ensures `/tmp/.qBittorrent` exists with mode **1777** (Torrent Creator temp for multi-user)
 - Backs up nginx and per-user `qBittorrent.conf` to `.orig` files
 - Applies a qBittorrent **5.2+-compatible** nginx reverse-proxy snippet when the target series is ≥ 5.2 (Swizzin multi-user)
 - Restarts only services that were active before the upgrade
@@ -160,7 +161,8 @@ Without `--version` / `--beta`, the script installs the **latest stable** qBitto
 7. **Build** dependencies as needed (Boost, libtorrent, qt6-swizzin, …).
 8. **Update** `/etc/nginx/apps/qbittorrent.conf` for 5.2+ reverse-proxy behaviour (when target series ≥ 5.2; **before** installing the new package; `nginx -t` or reload failure restores the previous file and leaves the old binary intact).
 9. **Build & package** qbittorrent-nox; install with `dpkg -i` (pre-releases use Debian `~` versioning); `apt-mark hold`.
-10. **Start** only units that were active before; verify version and local WebUI reachability.
+10. **Ensure** `/tmp/.qBittorrent` with mode `1777` (shared Torrent Creator temp).
+11. **Start** only units that were active before; verify version and local WebUI reachability.
 
 Preflight (also in `--dry-run`): when qt6-swizzin / cmake-swizzin / zlib-ng are planned, the script HEAD-checks the corresponding GitHub release assets **before** stopping services.
 
