@@ -1,18 +1,30 @@
 # qBittorrent Auto-Upgrade for Swizzin (Debian 12)
 
-Script: **[`qbittorrent-auto-upgrade.sh`](qbittorrent-auto-upgrade.sh)** — on each run it **auto-resolves the newest GitHub stable** and builds/installs it with that tag’s dependency floors.
+**[`qbittorrent-auto-upgrade.sh`](qbittorrent-auto-upgrade.sh)** — controlled, reproducible upgrade of **qbittorrent-nox** on an existing [Swizzin](https://swizzin.ltd/) host running **Debian 12 (Bookworm)**.
 
-Controlled, reproducible upgrade of **qbittorrent-nox** on an existing [Swizzin](https://swizzin.ltd/) host running **Debian 12 (Bookworm)**.
+On each default run the script:
 
-**Default:** always builds the **current GitHub stable** release and installs the **dependency floors prescribed by that exact tag** (from upstream `CMakeLists.txt` / `CommonConfig.cmake`). No qBittorrent version and no Qt/libtorrent/Boost minima are hard-coded in the script.
+1. Resolves the **newest stable** `release-*` tag from GitHub  
+2. Reads **dependency floors** for that exact tag (Qt, libtorrent, Boost, OpenSSL, zlib, CMake, C++)  
+3. Builds and installs **qbittorrent-nox** with those requirements  
 
-Verified with **qBittorrent 5.3.0**; newer stables are picked up automatically on the next run.
+No qBittorrent series and no dependency minima are hard-coded in the script name or logic.
 
-The tool mirrors Swizzin’s compile-and-package workflow (see [swizzin/swizzin#1300](https://github.com/swizzin/swizzin/pull/1300)) **without** modifying `/etc/swizzin` sources or switching Swizzin git branches. It preserves production configuration, supports multi-user instances, and provides dry-run and rollback paths.
+The workflow mirrors Swizzin’s compile-and-package approach (see [swizzin/swizzin#1300](https://github.com/swizzin/swizzin/pull/1300)) **without** modifying `/etc/swizzin` sources or switching Swizzin git branches. Production configs, multi-user instances, dry-run, and rollback are preserved.
 
-**Current script version:** [`1.7.3`](CHANGELOG.md#173--2026-10-24) — full history in [CHANGELOG.md](CHANGELOG.md).
+**Current script version:** [`1.7.4`](CHANGELOG.md#174--2026-10-24) — full history in [CHANGELOG.md](CHANGELOG.md).
 
-> The script does **not** start itself (no cron/daemon). You must invoke it; once started, it auto-selects and installs the current stable unless you pass `--version` / `--beta`.
+> The script does **not** start itself (no cron/daemon). You must invoke it. Once started, it auto-selects and installs the current GitHub stable unless you pass `--version` or `--beta`.
+
+### Migration from older releases
+
+| Before | Now |
+| --- | --- |
+| `upgrade-qbittorrent-5.2.sh` | [`qbittorrent-auto-upgrade.sh`](qbittorrent-auto-upgrade.sh) |
+| Default / `--series 5.2` | Default = **latest GitHub stable** (any series) |
+| Stable pins only | Optional `--version X.Y.Z` or `--beta` |
+
+Commands and flags otherwise stay the same (`--dry-run`, `--yes`, `--rollback`, …).
 
 ---
 
@@ -20,11 +32,11 @@ The tool mirrors Swizzin’s compile-and-package workflow (see [swizzin/swizzin#
 
 | Component | Supported | Notes |
 | --- | --- | --- |
-| **This tool** | [`1.7.3`](CHANGELOG.md#173--2026-10-24) | See [CHANGELOG.md](CHANGELOG.md) for older tool releases |
+| **This tool** | [`1.7.4`](CHANGELOG.md#174--2026-10-24) | See [CHANGELOG.md](CHANGELOG.md) for older tool releases |
 | **Host OS** | Debian **12** (Bookworm) | Other releases are untested |
 | **Panel stack** | [Swizzin](https://swizzin.ltd/) with multi-user `qbittorrent@*` | `/etc/swizzin` is not modified |
 | **Upgrade from** | qBittorrent **5.1.x** / **5.2.x** / **5.3.x** | Other starting versions may work; verify first |
-| **Upgrade to** | **Current GitHub stable** (default), optional `--version` pin, or `--beta` | Deps always from the resolved tag; nginx 5.2+ snippet when target series ≥ 5.2 |
+| **Upgrade to** | **Current GitHub stable** (default), optional `--version`, or `--beta` | Deps always from the resolved tag; nginx 5.2+ snippet when target series ≥ 5.2 |
 | **Pre-releases** | Via `--beta` only | Not for production |
 
 | Invocation | Target |
@@ -33,9 +45,11 @@ The tool mirrors Swizzin’s compile-and-package workflow (see [swizzin/swizzin#
 | `--version X.Y.Z` | Exact stable pin + that release’s dependency floors |
 | `--beta` | Newest upstream **beta/RC/pre-release** + that tag’s floors |
 
-Example floors for **5.3.0** (illustrative only — each run re-reads upstream for the chosen tag):
+### Example floors (qBittorrent 5.3.0)
 
-| Dependency | Minimum (5.3.0) |
+Illustrative only — each run re-reads upstream for the chosen tag:
+
+| Dependency | Minimum |
 | --- | --- |
 | CMake | 3.16 |
 | C++ | 20 |
@@ -47,7 +61,7 @@ Example floors for **5.3.0** (illustrative only — each run re-reads upstream f
 
 On Bookworm, distro Qt is often below the upstream Qt floor → **qt6-swizzin** (+ zlib-ng) may be installed. Lua for 5.3+ `PLUGINS` is **bundled** in the qBittorrent source (no system `liblua`).
 
-When you publish on GitHub, also tag tool releases (e.g. `v1.7.3`) and point this table at [Releases](../../releases) if desired.
+When publishing on GitHub, tag tool releases (e.g. `v1.7.4`) and optionally point this table at [Releases](../../releases).
 
 ---
 
@@ -62,9 +76,9 @@ See [`LICENSE`](LICENSE) for the full terms, or <https://www.gnu.org/licenses/gp
 ## Features
 
 - Detects OS, architecture, installed qBittorrent / libtorrent / Qt / CMake / Ninja, systemd units, config paths, disk space, and GitHub connectivity
-- Resolves a target release: latest stable by default (or `--stable`), or `--version` / `--beta`
+- Resolves a target release: **latest stable by default** (or `--stable`), or `--version` / `--beta`
 - Reads **build requirements from upstream** for that tag (Qt, libtorrent, Boost, OpenSSL, zlib, CMake, C++)
-- Builds headless **qbittorrent-nox** (`GUI=OFF`) with CMake + Ninja
+- Builds headless **qbittorrent-nox** (`GUI=OFF`, `WEBUI=ON`) with CMake + Ninja
 - Packages with `fpm` and installs via `dpkg -i` (no blind `apt remove` / `purge`)
 - Reuses a compatible static libtorrent when possible; rebuilds only when required
 - Installs Swizzin cross-build Qt (`qt6-swizzin`) when distro Qt is too old — **no** full Qt source compile by default
@@ -80,7 +94,7 @@ See [`LICENSE`](LICENSE) for the full terms, or <https://www.gnu.org/licenses/gp
 | Requirement | Notes |
 | --- | --- |
 | Debian 12 Bookworm | Verified target platform |
-| Existing Swizzin + qbittorrent-nox | Typically 5.1.x today |
+| Existing Swizzin + qbittorrent-nox | Typically 5.1.x–5.3.x today |
 | Root privileges | Required for packages, services, nginx |
 | Free disk space | Script checks for ≥ 4 GiB on the filesystem backing the work directory (`WORK_ROOT`, default under `/var/tmp`) |
 | Network access to GitHub | Source tags, optional Swizzin cross-build DEBs |
@@ -91,7 +105,7 @@ See [`LICENSE`](LICENSE) for the full terms, or <https://www.gnu.org/licenses/gp
 ## Quick start
 
 ```bash
-# Plan only — always newest GitHub stable + that tag's dependency floors
+# Plan only — newest GitHub stable + that tag's dependency floors
 sudo ./qbittorrent-auto-upgrade.sh --dry-run
 
 # Build & install current stable + its prescribed deps (default)
@@ -120,7 +134,7 @@ sudo ./qbittorrent-auto-upgrade.sh --rollback
 | `--version X.Y.Z` | Install **exactly** this stable release |
 | `--beta` | Latest upstream **beta/RC/pre-release** (not for production) |
 | `--libtorrent RC_1_2\|RC_2_0` | libtorrent branch (default: `RC_1_2`) |
-| `--rollback` | Return to Swizzin's current stable: prefer local `/etc/swizzin/.../qbittorrent` series menu (else GitHub), then `QBITTORRENT_VERSION=<ver> box upgrade qbittorrent` |
+| `--rollback` | Return to Swizzin's current stable via `QBITTORRENT_VERSION=<ver> box upgrade qbittorrent` |
 | `--help` | Show usage |
 
 Without `--version` / `--beta`, the script installs the **latest stable** qBittorrent release from GitHub (`--stable` is optional and equivalent).
@@ -138,7 +152,7 @@ Without `--version` / `--beta`, the script installs the **latest stable** qBitto
 ## How it works
 
 1. **Discover** the host environment (no hard-coded usernames, ports, or service names).
-2. **Resolve** the target qBittorrent version.
+2. **Resolve** the target qBittorrent version (latest stable by default).
 3. **Fetch** upstream build minima for that tag (Qt, libtorrent, CMake, C++, Boost, OpenSSL, zlib).
 4. **Plan** packages and rebuilds (dry-run stops here if requested).
 5. **Backup** packages, systemd state, configs, nginx, and per-user `qBittorrent.conf`.

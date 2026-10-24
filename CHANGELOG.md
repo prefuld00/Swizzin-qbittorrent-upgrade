@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.4] — 2026-10-24
+<a id="174--2026-10-24"></a>
+
+### Changed
+
+- **README**: merge legacy GitHub docs (v1.3.x / `upgrade-qbittorrent-5.2.sh`) with the auto-upgrade narrative — migration table, clearer default behaviour, updated CLI and risks.
+
+---
+
 ## [1.7.3] — 2026-10-24
 <a id="173--2026-10-24"></a>
 

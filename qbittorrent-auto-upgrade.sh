@@ -7,7 +7,7 @@ IFS=$'\n\t'
 # -----------------------------------------------------------------------------
 SCRIPT_NAME="$(basename "${0}")"
 readonly SCRIPT_NAME
-readonly SCRIPT_VERSION="1.7.3"
+readonly SCRIPT_VERSION="1.7.4"
 readonly LOG_FILE_ENV="${QBT_UPGRADE_LOG:-}"
 readonly WORK_ROOT_ENV="${QBT_UPGRADE_WORK:-}"
 # Defaults become versioned after the target qBittorrent release is known
