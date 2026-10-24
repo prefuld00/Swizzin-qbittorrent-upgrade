@@ -1,12 +1,18 @@
-# qBittorrent Upgrade Tool for Swizzin (Debian 12)
+# qBittorrent Auto-Upgrade for Swizzin (Debian 12)
+
+Script: **[`qbittorrent-auto-upgrade.sh`](qbittorrent-auto-upgrade.sh)** — on each run it **auto-resolves the newest GitHub stable** and builds/installs it with that tag’s dependency floors.
 
 Controlled, reproducible upgrade of **qbittorrent-nox** on an existing [Swizzin](https://swizzin.ltd/) host running **Debian 12 (Bookworm)**.
 
+**Default:** always builds the **current GitHub stable** release and installs the **dependency floors prescribed by that exact tag** (from upstream `CMakeLists.txt` / `CommonConfig.cmake`). No qBittorrent version and no Qt/libtorrent/Boost minima are hard-coded in the script.
+
+Verified with **qBittorrent 5.3.0**; newer stables are picked up automatically on the next run.
+
 The tool mirrors Swizzin’s compile-and-package workflow (see [swizzin/swizzin#1300](https://github.com/swizzin/swizzin/pull/1300)) **without** modifying `/etc/swizzin` sources or switching Swizzin git branches. It preserves production configuration, supports multi-user instances, and provides dry-run and rollback paths.
 
-**Current script version:** [`1.3.2`](CHANGELOG.md#132--2026-09-27) — full history in [CHANGELOG.md](CHANGELOG.md).
+**Current script version:** [`1.7.3`](CHANGELOG.md#173--2026-10-24) — full history in [CHANGELOG.md](CHANGELOG.md).
 
-> The script does **not** run an upgrade automatically. You must invoke it explicitly on the target server.
+> The script does **not** start itself (no cron/daemon). You must invoke it; once started, it auto-selects and installs the current stable unless you pass `--version` / `--beta`.
 
 ---
 
@@ -14,16 +20,34 @@ The tool mirrors Swizzin’s compile-and-package workflow (see [swizzin/swizzin#
 
 | Component | Supported | Notes |
 | --- | --- | --- |
-| **This tool** | [`1.3.2`](CHANGELOG.md#132--2026-09-27) | See [CHANGELOG.md](CHANGELOG.md) for older tool releases |
+| **This tool** | [`1.7.3`](CHANGELOG.md#173--2026-10-24) | See [CHANGELOG.md](CHANGELOG.md) for older tool releases |
 | **Host OS** | Debian **12** (Bookworm) | Other releases are untested |
 | **Panel stack** | [Swizzin](https://swizzin.ltd/) with multi-user `qbittorrent@*` | `/etc/swizzin` is not modified |
-| **Upgrade from** | qBittorrent **5.1.x** (e.g. 5.1.4) | Other starting versions may work; verify first |
-| **Upgrade to** | qBittorrent **5.2.x** (stable) | Tested target series; latest stable is often [`5.2.3`](https://github.com/qbittorrent/qBittorrent/releases/tag/release-5.2.3) |
-| **Pre-releases** | Not supported | Do not use beta/RC/nightly (e.g. 5.3.0beta1) in production |
+| **Upgrade from** | qBittorrent **5.1.x** / **5.2.x** / **5.3.x** | Other starting versions may work; verify first |
+| **Upgrade to** | **Current GitHub stable** (default), optional `--version` pin, or `--beta` | Deps always from the resolved tag; nginx 5.2+ snippet when target series ≥ 5.2 |
+| **Pre-releases** | Via `--beta` only | Not for production |
 
-Pin a target with `--version 5.2.3`, or take the newest stable in the series with `--series 5.2`. Build minima are read from the chosen upstream tag; nginx handling in this release is tailored to **5.2.x**.
+| Invocation | Target |
+| --- | --- |
+| *(no version flags)* or `--stable` | **Newest stable** on GitHub + that release’s dependency floors |
+| `--version X.Y.Z` | Exact stable pin + that release’s dependency floors |
+| `--beta` | Newest upstream **beta/RC/pre-release** + that tag’s floors |
 
-When you publish on GitHub, also tag tool releases (e.g. `v1.3.2`) and point this table at [Releases](../../releases) if desired.
+Example floors for **5.3.0** (illustrative only — each run re-reads upstream for the chosen tag):
+
+| Dependency | Minimum (5.3.0) |
+| --- | --- |
+| CMake | 3.16 |
+| C++ | 20 |
+| Qt | 6.6.0 |
+| Boost | 1.76 |
+| OpenSSL | 3.0.2 |
+| zlib | 1.2.11 |
+| libtorrent-rasterbar | **1.2.19+** (default `RC_1_2`) or **2.0.10+** (`RC_2_0`) |
+
+On Bookworm, distro Qt is often below the upstream Qt floor → **qt6-swizzin** (+ zlib-ng) may be installed. Lua for 5.3+ `PLUGINS` is **bundled** in the qBittorrent source (no system `liblua`).
+
+When you publish on GitHub, also tag tool releases (e.g. `v1.7.3`) and point this table at [Releases](../../releases) if desired.
 
 ---
 
@@ -38,16 +62,16 @@ See [`LICENSE`](LICENSE) for the full terms, or <https://www.gnu.org/licenses/gp
 ## Features
 
 - Detects OS, architecture, installed qBittorrent / libtorrent / Qt / CMake / Ninja, systemd units, config paths, disk space, and GitHub connectivity
-- Resolves a target release via `--version X.Y.Z` or `--series X.Y` (default series: `5.2`)
-- Reads **build requirements from upstream** (`CMakeLists.txt`, `CommonConfig.cmake`) for the selected tag
+- Resolves a target release: latest stable by default (or `--stable`), or `--version` / `--beta`
+- Reads **build requirements from upstream** for that tag (Qt, libtorrent, Boost, OpenSSL, zlib, CMake, C++)
 - Builds headless **qbittorrent-nox** (`GUI=OFF`) with CMake + Ninja
 - Packages with `fpm` and installs via `dpkg -i` (no blind `apt remove` / `purge`)
 - Reuses a compatible static libtorrent when possible; rebuilds only when required
 - Installs Swizzin cross-build Qt (`qt6-swizzin`) when distro Qt is too old — **no** full Qt source compile by default
 - Backs up nginx and per-user `qBittorrent.conf` to `.orig` files
-- Applies a qBittorrent **5.2.x-compatible** nginx reverse-proxy snippet for Swizzin multi-user setups
+- Applies a qBittorrent **5.2+-compatible** nginx reverse-proxy snippet when the target series is ≥ 5.2 (Swizzin multi-user)
 - Restarts only services that were active before the upgrade
-- Supports `--dry-run`, `--yes`, and `--rollback`
+- Supports `--dry-run`, `--yes`, and `--rollback` (Swizzin stable via `box upgrade`)
 
 ---
 
@@ -58,7 +82,7 @@ See [`LICENSE`](LICENSE) for the full terms, or <https://www.gnu.org/licenses/gp
 | Debian 12 Bookworm | Verified target platform |
 | Existing Swizzin + qbittorrent-nox | Typically 5.1.x today |
 | Root privileges | Required for packages, services, nginx |
-| Free disk space | Script checks for ≥ 4 GiB under `/var/tmp` |
+| Free disk space | Script checks for ≥ 4 GiB on the filesystem backing the work directory (`WORK_ROOT`, default under `/var/tmp`) |
 | Network access to GitHub | Source tags, optional Swizzin cross-build DEBs |
 | Independent server backup | Strongly recommended before production use |
 
@@ -67,14 +91,23 @@ See [`LICENSE`](LICENSE) for the full terms, or <https://www.gnu.org/licenses/gp
 ## Quick start
 
 ```bash
-# Plan only (no changes)
-sudo ./upgrade-qbittorrent-5.2.sh --version 5.2.3 --dry-run
+# Plan only — always newest GitHub stable + that tag's dependency floors
+sudo ./qbittorrent-auto-upgrade.sh --dry-run
 
-# Perform upgrade
-sudo ./upgrade-qbittorrent-5.2.sh --version 5.2.3 --yes
+# Build & install current stable + its prescribed deps (default)
+sudo ./qbittorrent-auto-upgrade.sh --yes
 
-# Roll back to the previous package / nginx config
-sudo ./upgrade-qbittorrent-5.2.sh --rollback
+# Same as default
+sudo ./qbittorrent-auto-upgrade.sh --stable --yes
+
+# Optional: pin an exact stable (deps still from that tag)
+sudo ./qbittorrent-auto-upgrade.sh --version 5.3.0 --yes
+
+# Latest upstream beta/RC (not for production)
+sudo ./qbittorrent-auto-upgrade.sh --beta --yes
+
+# Roll back to Swizzin's current stable (via box upgrade)
+sudo ./qbittorrent-auto-upgrade.sh --rollback
 ```
 
 ### Command-line options
@@ -83,18 +116,21 @@ sudo ./upgrade-qbittorrent-5.2.sh --rollback
 | --- | --- |
 | `--dry-run` | Analyse and print the plan; change nothing |
 | `--yes` | Skip interactive confirmation |
-| `--version X.Y.Z` | Exact stable release (e.g. `5.2.3`) |
-| `--series X.Y` | Latest stable within a series (default: `5.2`) |
+| `--stable` | Latest **stable** from GitHub (same as no version flags) |
+| `--version X.Y.Z` | Install **exactly** this stable release |
+| `--beta` | Latest upstream **beta/RC/pre-release** (not for production) |
 | `--libtorrent RC_1_2\|RC_2_0` | libtorrent branch (default: `RC_1_2`) |
-| `--rollback` | Restore previous qBittorrent package and nginx app config |
+| `--rollback` | Return to Swizzin's current stable: prefer local `/etc/swizzin/.../qbittorrent` series menu (else GitHub), then `QBITTORRENT_VERSION=<ver> box upgrade qbittorrent` |
 | `--help` | Show usage |
+
+Without `--version` / `--beta`, the script installs the **latest stable** qBittorrent release from GitHub (`--stable` is optional and equivalent).
 
 ### Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `QBT_UPGRADE_LOG` | `/var/log/qbittorrent-5.2-upgrade.log` | Log file |
-| `QBT_UPGRADE_WORK` | `/var/tmp/qbittorrent-5.2-upgrade` | Build work directory |
+| `QBT_UPGRADE_LOG` | `/var/log/qbittorrent-<version>-upgrade.log` | Log file (version = target release) |
+| `QBT_UPGRADE_WORK` | `/var/tmp/qbittorrent-<version>-upgrade` | Build work directory (version = target release) |
 | `QBT_UPGRADE_DIST` | `/root/dist` | Output directory for `.deb` packages |
 
 ---
@@ -108,9 +144,11 @@ sudo ./upgrade-qbittorrent-5.2.sh --rollback
 5. **Backup** packages, systemd state, configs, nginx, and per-user `qBittorrent.conf`.
 6. **Stop** previously active `qbittorrent@*` units only.
 7. **Build** dependencies as needed (Boost, libtorrent, qt6-swizzin, …).
-8. **Build & package** qbittorrent-nox; install with `dpkg -i`; `apt-mark hold`.
-9. **Update** `/etc/nginx/apps/qbittorrent.conf` for 5.2.x reverse-proxy behaviour.
+8. **Update** `/etc/nginx/apps/qbittorrent.conf` for 5.2+ reverse-proxy behaviour (when target series ≥ 5.2; **before** installing the new package; `nginx -t` or reload failure restores the previous file and leaves the old binary intact).
+9. **Build & package** qbittorrent-nox; install with `dpkg -i` (pre-releases use Debian `~` versioning); `apt-mark hold`.
 10. **Start** only units that were active before; verify version and local WebUI reachability.
+
+Preflight (also in `--dry-run`): when qt6-swizzin / cmake-swizzin / zlib-ng are planned, the script HEAD-checks the corresponding GitHub release assets **before** stopping services.
 
 ---
 
@@ -123,9 +161,9 @@ After the target version is known, the script reads:
 
 Parsed fields include `minQt6Version`, `minLibtorrent1Version`, `minLibtorrentVersion`, `minBoostVersion`, `minOpenSSLVersion`, `minZlibVersion`, `cmake_minimum_required`, and the C++ standard (`cxx_std_*`).
 
-These values drive planning. Hard-coded floors apply **only** as emergency fallbacks if GitHub is unreachable.
+These values drive planning. If upstream metadata cannot be fetched or parsed, the script **aborts** — it does not invent version floors.
 
-Within a tested minor series (e.g. all stable **5.2.x**), selecting a newer patch via `--version` is intentional. For a new minor/major (e.g. 5.3), validate nginx and packaging behaviour and publish a dedicated release of this tool.
+Within a tested minor series (e.g. all stable **5.3.x**), selecting a newer patch via `--version` is intentional. For a new minor/major beyond the verified series, validate nginx and packaging behaviour and publish a dedicated release of this tool.
 
 ---
 
@@ -139,6 +177,7 @@ cmake -G Ninja -B build \
   -D CMAKE_CXX_STANDARD=<from upstream> \
   -D Boost_NO_BOOST_CMAKE=TRUE \
   -D GUI=OFF \
+  -D WEBUI=ON \
   -D CMAKE_INSTALL_PREFIX=<stage>/usr
 cmake --build build
 cmake --install build
@@ -149,8 +188,9 @@ apt-mark hold qbittorrent-nox
 
 Notes:
 
-- `-D QT6=…` is passed only if that CMake option exists in the downloaded tree (5.2.x is Qt6-only).
-- Compatible static libtorrent under `/usr/local` is reused when possible.
+- `-D QT6=…` is passed only if that CMake option exists in the downloaded tree (5.2+/5.3.x is Qt6-only).
+- `PLUGINS` (5.3+) is left at the upstream default (`ON`); Lua/LuaBridge are vendored in the source tree.
+- Compatible static libtorrent under `/usr/local` is reused when possible; otherwise the newest `v1.2.*` tag is built (`RC_1_2`).
 - Install prefix matches Swizzin: **`/usr`** via Debian package (not a raw `/usr/local` install).
 - On Bookworm, distro Qt is often &lt; upstream minimum → **qt6-swizzin** (+ zlib-ng) may be installed; this is announced explicitly.
 
@@ -174,28 +214,37 @@ Existing `.orig` files are never overwritten; an extra `.bak.<timestamp>` copy i
 ## Rollback
 
 ```bash
-sudo ./upgrade-qbittorrent-5.2.sh --rollback
+sudo ./qbittorrent-auto-upgrade.sh --rollback
+# optional plan only:
+sudo ./qbittorrent-auto-upgrade.sh --rollback --dry-run
 ```
 
-Rollback restores:
+Rollback does **not** reinstall the local backup `.deb`. It returns the host to **Swizzin's current stable** qBittorrent:
 
-- The previous `qbittorrent-nox` `.deb` from the backup (or the saved binary as a last resort)
-- nginx config from `qbittorrent.conf.orig` (or the backup copy)
-- Previously active systemd units
+1. Prefer the local Swizzin function `/etc/swizzin/sources/functions/qbittorrent` (fallback: same file from Swizzin GitHub master)
+2. Read the preferred series for this OS (first non-`Repo` entry in Swizzin's whiptail menu, e.g. **5.1** on Debian 12)
+3. Resolve the latest stable patch of that series from qBittorrent tags (e.g. `5.1.4`)
+4. `apt-mark unhold qbittorrent-nox`, then run (no version dialog):
 
-Live per-user WebUI passwords and settings are **not** overwritten by rollback. Manual restore from `.orig` / the backup tree remains available if needed.
+```bash
+QBITTORRENT_VERSION=<resolved> box upgrade qbittorrent
+```
+
+5. After a successful `box upgrade`, restore `/etc/nginx/apps/qbittorrent.conf` from `.orig` **only if** the resolved Swizzin target series is &lt; 5.2 (for ≥ 5.2, keep the 5.2+ proxy snippet)
+
+Live per-user WebUI passwords and settings are left to Swizzin's upgrade path. Timestamped backups under `/root/qbittorrent-upgrade-backup-*` remain available for manual recovery if needed.
 
 ---
 
-## nginx / WebUI (5.2.x)
+## nginx / WebUI (5.2+)
 
-qBittorrent 5.2.x validates HTTP Basic Auth forwarded by reverse proxies. Swizzin’s stock `/qbittorrent/` location can therefore return **Unauthorized** when panel credentials differ from WebUI credentials.
+qBittorrent 5.2+ validates HTTP Basic Auth forwarded by reverse proxies. Swizzin’s stock `/qbittorrent/` location can therefore return **Unauthorized** when panel credentials differ from WebUI credentials.
 
-This tool:
+This tool (when the target series is ≥ 5.2):
 
 1. Backs up `/etc/nginx/apps/qbittorrent.conf` → `.orig`
 2. Installs a multi-user-compatible location (forwarded headers + `proxy_set_header Authorization ""`)
-3. Reloads nginx after `nginx -t`
+3. Runs `nginx -t` and `systemctl reload`; restores the previous file if either fails (before the new qbittorrent package is installed)
 
 Recommended **manual** setting per user (not written by the script):
 
@@ -245,22 +294,22 @@ in `~/.config/qBittorrent/qBittorrent.conf`.
 ## Removing the tool files
 
 ```bash
-rm -f ./upgrade-qbittorrent-5.2.sh ./README.md ./CHANGELOG.md ./LICENSE
+rm -f ./qbittorrent-auto-upgrade.sh ./README.md ./CHANGELOG.md ./LICENSE
 # Optional:
-# rm -f /var/log/qbittorrent-5.2-upgrade.log
+# rm -f /var/log/qbittorrent-*-upgrade.log
 # rm -rf /root/qbittorrent-upgrade-backup-*
-# rm -rf /var/tmp/qbittorrent-5.2-upgrade
+# rm -rf /var/tmp/qbittorrent-*-upgrade
 ```
 
-Installed `qbittorrent-nox` remains installed. Use `--rollback` while backups still exist if you need the previous package.
+Installed `qbittorrent-nox` remains installed. Use `--rollback` to return to Swizzin's current stable via `box upgrade`, or reinstall manually from a backup under `/root/qbittorrent-upgrade-backup-*` if needed.
 
 ---
 
 ## Development checks
 
 ```bash
-bash -n upgrade-qbittorrent-5.2.sh
-command -v shellcheck >/dev/null && shellcheck -x upgrade-qbittorrent-5.2.sh
+bash -n qbittorrent-auto-upgrade.sh
+command -v shellcheck >/dev/null && shellcheck -x qbittorrent-auto-upgrade.sh
 ```
 
 When releasing, bump `SCRIPT_VERSION` in the script and add a matching entry in [CHANGELOG.md](CHANGELOG.md).
